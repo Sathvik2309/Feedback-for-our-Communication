@@ -32,7 +32,7 @@ improvement_instructions = [
 
 @app.route('/')
 def index():
-    return render_template('commfee.html')
+    return render_template('commfeed.html')
 
 @app.route('/upload', methods=['POST'])
 def upload():
