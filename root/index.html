@@ -1,1 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Communication Feedback</title>
+    <style>
+        /* General body styling for dark theme */
+        body {
+            background-color: #121212;
+            color: #E0E0E0;
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 0;
+            padding: 20px;
+        }
 
+        h1 {
+            color: #BB86FC;
+            margin-bottom: 20px;
+        }
+
+        #status {
+            font-size: 1.1em;
+            margin-top: 10px;
+            color: #03DAC6;
+        }
+
+        /* Button styling */
+        button {
+            background-color: #BB86FC;
+            color: #121212;
+            border: none;
+            border-radius: 5px;
+            padding: 10px 20px;
+            margin: 5px;
+            font-size: 1em;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        button:disabled {
+            background-color: #3A3A3A;
+            color: #888;
+            cursor: not-allowed;
+        }
+
+        button:hover:enabled {
+            background-color: #3700B3;
+        }
+
+        /* Audio player styling */
+        #audioPlayback {
+            margin-top: 20px;
+            width: 100%;
+            max-width: 500px;
+        }
+
+        /* Feedback section styling */
+        #feedback {
+            background-color: #1F1B24;
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 20px;
+            width: 100%;
+            max-width: 600px;
+            color: #E0E0E0;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.5);
+        }
+
+        #feedback h2 {
+            color: #BB86FC;
+            margin-top: 0;
+        }
+
+        #feedback p, #feedback ul {
+            color: #E0E0E0;
+        }
+
+        /* Improvement instructions list */
+        ul {
+            padding-left: 20px;
+        }
+
+        ul li {
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Record Your Speech for Feedback</h1>
+    <button id="start">Start Recording</button>
+    <button id="stop" disabled>Stop Recording</button>
+    <button id="upload" disabled>Upload Recording</button>
+    <p id="status"></p>
+    <audio id="audioPlayback" controls></audio>
+
+    <div id="feedback">
+        <!-- Feedback will be displayed here -->
+    </div>
+
+    <script>
+        let mediaRecorder;
+        let audioChunks = [];
+        let audioBlob;
+
+        document.getElementById('start').addEventListener('click', async () => {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorder = new MediaRecorder(stream);
+                mediaRecorder.ondataavailable = event => {
+                    audioChunks.push(event.data);
+                };
+                mediaRecorder.onstop = () => {
+                    audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                    const audioUrl = URL.createObjectURL(audioBlob);
+                    document.getElementById('audioPlayback').src = audioUrl;
+                    document.getElementById('upload').disabled = false;
+                    audioChunks = [];
+                };
+                mediaRecorder.start();
+                document.getElementById('status').innerText = 'Recording...';
+                document.getElementById('stop').disabled = false;
+                document.getElementById('start').disabled = true;
+            } catch (error) {
+                console.error('Error accessing audio devices:', error);
+                document.getElementById('status').innerText = 'Error accessing audio devices.';
+            }
+        });
+
+        document.getElementById('stop').addEventListener('click', () => {
+            if (mediaRecorder) {
+                mediaRecorder.stop();
+                document.getElementById('status').innerText = 'Recording stopped.';
+                document.getElementById('stop').disabled = true;
+                document.getElementById('start').disabled = false;
+            }
+        });
+
+        document.getElementById('upload').addEventListener('click', () => {
+            if (audioBlob) {
+                const formData = new FormData();
+                formData.append('file', audioBlob, 'recording.wav');
+
+                fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    // Display feedback
+                    document.getElementById('feedback').innerHTML = `
+                        <h2>Transcript:</h2>
+                        <p>${data.text || 'No transcript available.'}</p>
+                        <h2>Feedback:</h2>
+                        <p>${data.feedback || 'No feedback available.'}</p>
+                        <h2>Detailed Feedback:</h2>
+                        <p>${data.detailed_feedback || 'No detailed feedback available.'}</p>
+                        <h2>Improvement Instructions:</h2>
+                        <ul>
+                            ${data.improvement_instructions.map(item => `<li>${item}</li>`).join('')}
+                        </ul>
+                    `;
+                    document.getElementById('upload').disabled = true; // Disable upload button after successful upload
+                })
+                .catch(error => {
+                    console.error('Error uploading recording:', error);
+                    document.getElementById('status').innerText = 'Error uploading recording.';
+                });
+            } else {
+                document.getElementById('status').innerText = 'No recording available to upload.';
+            }
+        });
+    </script>
+</body>
+</html>
